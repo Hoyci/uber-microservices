@@ -3,8 +3,9 @@ package main
 import (
 	"log"
 	"net/http"
+	"ride-sharing/services/api-gateway/grpc_clients"
 	"ride-sharing/shared/contracts"
-	"ride-sharing/shared/util"
+	"ride-sharing/shared/proto/driver"
 
 	"github.com/gorilla/websocket"
 )
@@ -59,23 +60,37 @@ func handleDriversWebSocket(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	type Driver struct {
-		ID             string `json:"id"`
-		Name           string `json:"name"`
-		ProfilePicture string `json:"profilePicture"`
-		CarPlate       string `json:"carPlate"`
-		PackageSlug    string `json:"packageSlug"`
+	ctx := r.Context()
+
+	// This is not the best approach because it opens a new connection every request
+	// To handle this, we can create a pool of connection, but to the MVP is overengineering
+	driverService, err := grpc_clients.NewDriverServiceClient()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	defer func() {
+		driverService.Client.UnregisterDriver(ctx, &driver.RegisterDriverRequest{
+			DriverID:    userID,
+			PackageSlug: packageSlug,
+		})
+		driverService.Close()
+
+		log.Println("driver unregistered: ", userID)
+	}()
+
+	driverData, err := driverService.Client.RegisterDriver(ctx, &driver.RegisterDriverRequest{
+		DriverID:    userID,
+		PackageSlug: packageSlug,
+	})
+	if err != nil {
+		log.Printf("error registering driver: %v", err)
+		return
 	}
 
 	msg := contracts.WSMessage{
 		Type: "driver.cmd.register",
-		Data: Driver{
-			ID:             userID,
-			Name:           "John Doe",
-			ProfilePicture: util.GetRandomAvatar(1),
-			CarPlate:       "ABC123D",
-			PackageSlug:    packageSlug,
-		},
+		Data: driverData.Driver,
 	}
 
 	if err := conn.WriteJSON(msg); err != nil {
