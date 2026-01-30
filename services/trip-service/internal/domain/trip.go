@@ -3,6 +3,7 @@ package domain
 import (
 	"context"
 	tripTypes "ride-sharing/services/trip-service/pkg/types"
+	pbd "ride-sharing/shared/proto/driver"
 	pb "ride-sharing/shared/proto/trip"
 	"ride-sharing/shared/types"
 
@@ -17,10 +18,23 @@ type TripModel struct {
 	Driver   *pb.TripDriver
 }
 
+func (t *TripModel) ToProto() *pb.Trip {
+	return &pb.Trip{
+		Id:           t.ID.Hex(),
+		UserId:       t.UserID,
+		SelectedFare: t.RideFare.ToProto(),
+		Status:       t.Status,
+		Driver:       t.Driver,
+		Route:        t.RideFare.Route.ToProto(),
+	}
+}
+
 type TripRepository interface {
 	CreateTrip(ctx context.Context, trip *TripModel) (*TripModel, error)
 	SaveRideFare(ctx context.Context, fare *RideFareModel) error
 	GetRideFareByID(ctx context.Context, fareID string) (*RideFareModel, error)
+	GetTripByID(ctx context.Context, tripID string) (*TripModel, error)
+	UpdateTrip(ctx context.Context, tripID, status string, driver *pbd.Driver) error
 }
 
 type TripService interface {
@@ -29,4 +43,6 @@ type TripService interface {
 	EstimatePackagesPriceWithRoute(route *tripTypes.OSRMApiResponse) []*RideFareModel
 	GenerateTripFares(ctx context.Context, fares []*RideFareModel, userID string, route *tripTypes.OSRMApiResponse) ([]*RideFareModel, error)
 	GetAndValidateFare(ctx context.Context, fareID, userID string) (*RideFareModel, error)
+	GetTripByID(ctx context.Context, tripID string) (*TripModel, error)
+	UpdateTrip(ctx context.Context, tripID, status string, driver *pbd.Driver) error
 }
